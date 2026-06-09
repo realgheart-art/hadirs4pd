@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sistem Pergerakan Pegawai S4PD</title>
+    
+    <!-- PWA META TAGS -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2563eb">
+    <link rel="apple-touch-icon" href="https://i.ibb.co/7t49G0kH/Logo-JPN-KEDAH-HITAM.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Pustaka untuk Export Excel (SheetJS) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Pustaka untuk Export PDF (jsPDF & autoTable) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .spinner { border: 4px solid rgba(0, 0, 0, 0.1); width: 40px; height: 40px; border-radius: 50%; border-left-color: #3b82f6; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <!-- OVERLAY LOADING -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-white/80 z-50 flex flex-col justify-center items-center hidden">
+        <div class="spinner mb-4"></div>
+        <p class="text-gray-600 font-medium" id="loadingText">Sila tunggu sebentar...</p>
+    </div>
+
+    <!-- NOTIFIKASI TOAST -->
+    <div id="toastMessage" class="fixed top-4 right-4 z-50 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg transform transition-transform duration-300 translate-x-full opacity-0 flex items-center gap-3">
+        <i class="fas fa-check-circle"></i>
+        <span id="toastText">Berjaya!</span>
+    </div>
+
+    <!-- HALAMAN LOGIN -->
+    <div id="loginPage" class="min-h-screen flex items-center justify-center p-4 fade-in">
+        <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
+            <div class="text-center mb-8">
+                <div class="flex justify-center mx-auto mb-5">
+                    <img src="https://i.ibb.co/7t49G0kH/Logo-JPN-KEDAH-HITAM.png" alt="Logo JPN Kedah" class="h-28 object-contain">
+                </div>
+                <h1 class="text-2xl font-bold text-gray-900">Sistem Pergerakan Pegawai S4PD</h1>
+                <p class="text-gray-500 mt-2 text-sm">Sila log masuk untuk meneruskan</p>
+            </div>
+
+            <form id="loginForm" class="space-y-5">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">ID Pegawai</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fas fa-id-badge text-gray-400"></i>
+                        </div>
+                        <input type="text" id="loginId" required class="pl-10 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" placeholder="Contoh: P001">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Kata Laluan</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fas fa-lock text-gray-400"></i>
+                        </div>
+                        <input type="password" id="loginPassword" required class="pl-10 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" placeholder="••••••••">
+                    </div>
+                </div>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg shadow transition duration-200">
+                    Log Masuk
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- HALAMAN DASHBOARD -->
+    <div id="dashboardPage" class="hidden min-h-screen flex-col fade-in">
+        
+        <!-- Navbar -->
+        <nav class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-16 items-center">
+                    <div class="flex items-center gap-4">
+                        <img src="https://i.ibb.co/7t49G0kH/Logo-JPN-KEDAH-HITAM.png" alt="Logo JPN Kedah" class="h-10 object-contain">
+                        <span class="font-bold text-xl text-gray-800 tracking-tight hidden sm:block">Pergerakan S4PD</span>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <div class="text-right hidden sm:block">
+                            <p id="navUserName" class="text-sm font-semibold text-gray-900">Nama Pegawai</p>
+                            <p id="navUserUnit" class="text-xs text-gray-500">Unit</p>
+                        </div>
+                        <div class="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-bold overflow-hidden" id="navAvatar">
+                            A
+                        </div>
+                        <button onclick="logout()" class="text-gray-500 hover:text-red-500 transition p-2 rounded-md hover:bg-red-50" title="Log Keluar">
+                            <i class="fas fa-sign-out-alt"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            
+            <!-- Header & Actions -->
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-800 flex flex-wrap items-center gap-2">
+                        Dashboard Semasa 
+                        <span id="todayDateDisplay" class="text-sm px-3 py-1 bg-blue-100 text-blue-800 rounded-full font-semibold border border-blue-200"></span>
+                    </h2>
+                    <p class="text-sm text-gray-500 mt-1">Status keberadaan pegawai untuk hari ini sahaja. Auto-refresh: <span id="timerText" class="font-medium text-blue-600">60s</span></p>
+                </div>
+                <div class="flex flex-wrap gap-2 w-full md:w-auto">
+                    <button onclick="openStatusModal()" class="flex-1 md:flex-none bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg shadow font-medium transition flex items-center justify-center gap-2">
+                        <i class="fas fa-edit"></i> Kemaskini Status
+                    </button>
+                    <button onclick="openHistoryModal()" class="flex-1 md:flex-none bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2.5 rounded-lg shadow-sm font-medium transition flex items-center justify-center gap-2">
+                        <i class="fas fa-history"></i> Sejarah & Eksport
+                    </button>
+                </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6 flex flex-col sm:flex-row gap-4">
+                <div class="flex-1 relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fas fa-search text-gray-400"></i>
+                    </div>
+                    <input type="text" id="searchName" placeholder="Cari nama kakitangan..." class="pl-10 w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white transition" onkeyup="filterCards()">
+                </div>
+                <div class="sm:w-64">
+                    <select id="filterUnit" class="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white transition" onchange="filterCards()">
+                        <option value="Semua">Semua Unit</option>
+                        <option value="Timbalan Pengarah Pendidikan">Timbalan Pengarah Pendidikan</option>
+                        <option value="Unit Transformasi Pendidikan">Unit Transformasi Pendidikan</option>
+                        <option value="Unit Perancangan & Pembangunan">Unit Perancangan & Pembangunan</option>
+                        <option value="Pembantu Tadbir">Pembantu Tadbir</option>
+                        <option value="Personel Mystep">Personel Mystep</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Status Grid -->
+            <div id="statusGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                <!-- Kad status akan dijana di sini -->
+            </div>
+            
+            <!-- Empty State -->
+            <div id="emptyState" class="hidden text-center py-12">
+                <i class="fas fa-folder-open text-4xl text-gray-300 mb-3"></i>
+                <h3 class="text-lg font-medium text-gray-900">Tiada rekod dijumpai</h3>
+                <p class="text-gray-500 text-sm mt-1">Cuba ubah carian atau filter unit anda.</p>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- MODAL: KEMASKINI STATUS -->
+    <div id="statusModal" class="fixed inset-0 bg-black/50 z-40 hidden flex items-center justify-center p-4 fade-in">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div class="bg-blue-600 px-6 py-4 flex justify-between items-center text-white">
+                <h3 class="font-bold text-lg">Kemaskini Status Semasa</h3>
+                <button onclick="closeStatusModal()" class="text-white hover:text-gray-200"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            <form id="updateStatusForm" class="p-6 space-y-4">
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Tarikh Mula</label>
+                        <input type="date" id="inputTarikhMula" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Tarikh Tamat <span class="text-xs text-gray-400 font-normal">(Pilihan)</span></label>
+                        <input type="date" id="inputTarikhTamat" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Status Keberadaan</label>
+                    <select id="inputStatus" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <option value="" disabled selected>-- Pilih Status --</option>
+                        <option value="Hadir Bertugas">Hadir Bertugas</option>
+                        <option value="Cuti">Cuti</option>
+                        <option value="Outstation">Outstation</option>
+                        <option value="Kursus">Kursus</option>
+                        <option value="WFH">Work From Home (WFH)</option>
+                        <option value="MC">Sijil Sakit (MC)</option>
+                        <option value="Lain-lain">Lain-lain</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Lokasi (Pilihan)</label>
+                    <input type="text" id="inputLokasi" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="Cth: Bilik Mesyuarat Utama">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Catatan Tambahan</label>
+                    <textarea id="inputCatatan" rows="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="Nota tambahan..."></textarea>
+                </div>
+                <div class="pt-4 flex justify-end gap-3 border-t border-gray-100">
+                    <button type="button" onclick="closeStatusModal()" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium shadow transition">Simpan Status</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: SEJARAH PERGERAKAN & EKSPORT -->
+    <div id="historyModal" class="fixed inset-0 bg-black/50 z-40 hidden flex items-center justify-center p-4 fade-in">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden">
+            <div class="bg-gray-800 px-6 py-4 flex justify-between items-center text-white shrink-0">
+                <h3 class="font-bold text-lg"><i class="fas fa-history mr-2"></i> Log Sejarah Pergerakan S4PD</h3>
+                <button onclick="closeHistoryModal()" class="text-white hover:text-gray-300"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            
+            <div class="bg-gray-50 px-6 py-3 border-b border-gray-200 flex flex-wrap gap-4 items-center justify-between shrink-0">
+                <div class="flex items-center gap-3">
+                    <label for="filterMonth" class="text-sm font-semibold text-gray-700 whitespace-nowrap">Tapisan Bulan:</label>
+                    <input type="month" id="filterMonth" class="px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500" onchange="renderHistoryTable()">
+                    <button onclick="resetHistoryFilter()" class="text-sm text-blue-600 hover:text-blue-800 hover:underline">Reset</button>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium shadow-sm transition flex items-center gap-2">
+                        <i class="fas fa-file-excel"></i> Eksport Excel
+                    </button>
+                    <button onclick="exportToPDF()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium shadow-sm transition flex items-center gap-2">
+                        <i class="fas fa-file-pdf"></i> Eksport PDF
+                    </button>
+                </div>
+            </div>
+
+            <div class="p-0 overflow-y-auto flex-1 bg-white">
+                <table class="w-full text-left text-sm text-gray-600">
+                    <thead class="bg-gray-100 text-gray-700 sticky top-0 shadow-sm z-10">
+                        <tr>
+                            <th class="py-3 px-4">Tkh Dikemaskini</th>
+                            <th class="py-3 px-4">Nama</th>
+                            <th class="py-3 px-4">Status & Tempoh</th>
+                            <th class="py-3 px-4">Lokasi</th>
+                            <th class="py-3 px-4">Catatan</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyTableBody" class="divide-y divide-gray-200">
+                        <!-- Baris dijana di sini -->
+                    </tbody>
+                </table>
+                <div id="historyEmpty" class="hidden text-center py-12">
+                    <i class="fas fa-box-open text-4xl text-gray-300 mb-3"></i>
+                    <p class="text-gray-500 font-medium">Tiada rekod sejarah ditemui untuk bulan yang dipilih.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // ========================================
+        // 1. DAFTAR SERVICE WORKER (UNTUK PWA)
+        // ========================================
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                .then(registration => console.log('PWA ServiceWorker berjaya didaftarkan'))
+                .catch(err => console.log('ServiceWorker gagal:', err));
+            });
+        }
+
+        // ========================================
+        // 2. KONFIGURASI URL API
+        // ========================================
+        const SCRIPT_URL = ''; 
+        const isMockMode = SCRIPT_URL.trim() === '';
+
+        let currentUser = null;
+        let allStaffData = [];
+        let currentHistoryData = [];
+        let refreshTimer;
+        let countdown = 60;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const dateOptions = { day: '2-digit', month: 'long', year: 'numeric' };
+            document.getElementById('todayDateDisplay').innerText = new Date().toLocaleDateString('ms-MY', dateOptions);
+
+            const savedUser = localStorage.getItem('spp_user');
+            if (savedUser) {
+                currentUser = JSON.parse(savedUser);
+                showDashboard();
+            } else {
+                document.getElementById('loginPage').classList.remove('hidden');
+                document.getElementById('loginPage').classList.add('flex');
+            }
+        });
+
+        // ========================================
+        // 3. FUNGSI UTILITI
+        // ========================================
+        
+        function showLoading(text = 'Sila tunggu sebentar...') {
+            document.getElementById('loadingText').innerText = text;
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.add('hidden');
+        }
+
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toastMessage');
+            const toastText = document.getElementById('toastText');
+            toastText.innerText = message;
+            
+            if (isError) {
+                toast.classList.remove('bg-green-500');
+                toast.classList.add('bg-red-500');
+                toast.innerHTML = `<i class="fas fa-exclamation-circle"></i> <span id="toastText">${message}</span>`;
+            } else {
+                toast.classList.remove('bg-red-500');
+                toast.classList.add('bg-green-500');
+                toast.innerHTML = `<i class="fas fa-check-circle"></i> <span id="toastText">${message}</span>`;
+            }
+
+            toast.classList.remove('translate-x-full', 'opacity-0');
+            setTimeout(() => { toast.classList.add('translate-x-full', 'opacity-0'); }, 3000);
+        }
+
+        function getStatusColorClass(status) {
+            const statusMap = {
+                'Hadir Bertugas': 'bg-green-100 text-green-800 border-green-200',
+                'Cuti': 'bg-red-100 text-red-800 border-red-200',
+                'Outstation': 'bg-blue-100 text-blue-800 border-blue-200',
+                'Kursus': 'bg-orange-100 text-orange-800 border-orange-200',
+                'WFH': 'bg-purple-100 text-purple-800 border-purple-200',
+                'MC': 'bg-pink-100 text-pink-800 border-pink-200',
+                'Belum Kemaskini': 'bg-gray-100 text-gray-500 border-gray-200 opacity-75'
+            };
+            return statusMap[status] || 'bg-gray-100 text-gray-800 border-gray-200';
+        }
+
+        function getStatusIcon(status) {
+            const iconMap = {
+                'Hadir Bertugas': 'fa-building',
+                'Cuti': 'fa-umbrella-beach',
+                'Outstation': 'fa-plane-departure',
+                'Kursus': 'fa-chalkboard-user',
+                'WFH': 'fa-house-laptop',
+                'MC': 'fa-briefcase-medical',
+                'Belum Kemaskini': 'fa-question-circle'
+            };
+            return iconMap[status] || 'fa-info-circle';
+        }
+
+        function formatDateDisplay(dateStr) {
+            if (!dateStr || dateStr === '-') return '';
+            
+            if (dateStr.includes('T')) {
+                const d = new Date(dateStr);
+                if (!isNaN(d.getTime())) {
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const year = d.getFullYear();
+                    return `${day}/${month}/${year}`;
+                }
+            }
+
+            const cleanDate = dateStr.split('T')[0];
+            const parts = cleanDate.split('-');
+            if (parts.length === 3) {
+                if (parts[0].length === 4) {
+                    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+                }
+            }
+            return cleanDate;
+        }
+
+        function getTodayYMD() {
+            const d = new Date();
+            return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+
+        // ========================================
+        // 4. API CALL HANDLER
+        // ========================================
+        
+        async function apiCall(action, payload) {
+            if (isMockMode) return await mockApiCall(action, payload);
+            try {
+                const response = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: action, payload: payload })
+                });
+                return await response.json();
+            } catch (error) {
+                console.error("API Error:", error);
+                return { success: false, message: "Ralat sambungan ke pelayan." };
+            }
+        }
+
+        // ========================================
+        // 5. LOGIK APLIKASI
+        // ========================================
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('loginId').value.trim();
+            const pass = document.getElementById('loginPassword').value.trim();
+            if(!id || !pass) return;
+
+            showLoading('Mengesahkan ID...');
+            const result = await apiCall('login', { id: id, password: pass });
+            hideLoading();
+
+            if (result.success) {
+                currentUser = result.user;
+                localStorage.setItem('spp_user', JSON.stringify(currentUser));
+                showDashboard();
+                showToast(`Selamat datang, ${currentUser.nama}`);
+            } else {
+                showToast(result.message, true);
+            }
+        });
+
+        function logout() {
+            localStorage.removeItem('spp_user');
+            clearInterval(refreshTimer);
+            document.getElementById('dashboardPage').classList.add('hidden');
+            document.getElementById('dashboardPage').classList.remove('flex');
+            document.getElementById('loginPage').classList.remove('hidden');
+            document.getElementById('loginPage').classList.add('flex');
+            document.getElementById('loginId').value = '';
+            document.getElementById('loginPassword').value = '';
+        }
+
+        function showDashboard() {
+            document.getElementById('loginPage').classList.add('hidden');
+            document.getElementById('loginPage').classList.remove('flex');
+            document.getElementById('dashboardPage').classList.remove('hidden');
+            document.getElementById('dashboardPage').classList.add('flex');
+
+            document.getElementById('navUserName').innerText = currentUser.nama;
+            document.getElementById('navUserUnit').innerText = `${currentUser.unit} | Peranan: ${currentUser.role}`;
+            
+            const navAvatar = document.getElementById('navAvatar');
+            if (currentUser.gambar && currentUser.gambar !== '-') {
+                navAvatar.innerHTML = `<img src="${currentUser.gambar}" alt="Avatar" class="w-full h-full object-cover rounded-full">`;
+                navAvatar.classList.remove('bg-gray-200', 'text-gray-600');
+            } else {
+                navAvatar.innerHTML = currentUser.nama.charAt(0).toUpperCase();
+            }
+
+            loadAllStatus();
+            startAutoRefresh();
+        }
+
+        async function loadAllStatus() {
+            const result = await apiCall('getAllStatus', {});
+            if (result.success) {
+                allStaffData = result.data;
+                filterCards(); 
+                countdown = 60;
+                document.getElementById('timerText').innerText = countdown + 's';
+            } else {
+                showToast("Gagal memuat turun data", true);
+            }
+        }
+
+        function filterCards() {
+            const searchObj = document.getElementById('searchName').value.toLowerCase();
+            const unitObj = document.getElementById('filterUnit').value;
+
+            const filteredData = allStaffData.filter(staff => {
+                const matchName = staff.nama.toLowerCase().includes(searchObj);
+                const matchUnit = unitObj === 'Semua' || staff.unit === unitObj;
+                return matchName && matchUnit;
+            });
+
+            renderStatusCards(filteredData);
+        }
+
+        function renderStatusCards(dataArray) {
+            const container = document.getElementById('statusGrid');
+            const emptyState = document.getElementById('emptyState');
+            container.innerHTML = '';
+
+            if (dataArray.length === 0) {
+                container.classList.add('hidden');
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            container.classList.remove('hidden');
+            emptyState.classList.add('hidden');
+
+            dataArray.forEach(staff => {
+                const avatarHTML = staff.gambar && staff.gambar !== '-' ? 
+                    `<img src="${staff.gambar}" alt="${staff.nama}" class="w-10 h-10 rounded-full object-cover border border-gray-200 shadow-sm bg-white">` : 
+                    `<div class="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-lg border border-blue-100">${staff.nama.charAt(0)}</div>`;
+
+                let statusesHTML = '';
+                if (staff.statuses && staff.statuses.length > 0) {
+                    staff.statuses.forEach((stat, idx) => {
+                        const colorClass = getStatusColorClass(stat.status);
+                        const iconClass = getStatusIcon(stat.status);
+                        
+                        let durationBadge = '';
+                        if (stat.tarikh_mula && stat.tarikh_mula !== '-') {
+                            const mulaStr = formatDateDisplay(stat.tarikh_mula);
+                            const tamatStr = formatDateDisplay(stat.tarikh_tamat);
+                            const rangeText = (tamatStr && tamatStr !== mulaStr) ? `${mulaStr} - ${tamatStr}` : mulaStr;
+                            durationBadge = `<div class="bg-gray-50 text-gray-500 text-xs px-2 py-1 rounded mt-2 flex items-center gap-2 border border-gray-200 w-fit">
+                                                <i class="far fa-calendar-alt"></i> ${rangeText}
+                                             </div>`;
+                        }
+
+                        statusesHTML += `
+                            <div class="${idx > 0 ? 'mt-4 pt-4 border-t border-gray-100' : 'mt-2'}">
+                                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border ${colorClass} mb-2">
+                                    <i class="fas ${iconClass}"></i> ${stat.status}
+                                </div>
+                                ${durationBadge}
+                                <div class="mt-2 space-y-1">
+                                    ${stat.lokasi && stat.lokasi !== '-' ? `<p class="text-sm text-gray-700 flex items-start gap-2"><i class="fas fa-map-marker-alt text-gray-400 mt-0.5"></i> ${stat.lokasi}</p>` : ''}
+                                    ${stat.catatan && stat.catatan !== '-' ? `<p class="text-sm text-gray-600 flex items-start gap-2 italic"><i class="fas fa-comment-dots text-gray-400 mt-0.5"></i> "${stat.catatan}"</p>` : ''}
+                                </div>
+                                <div class="mt-2 text-[10px] text-gray-400 flex items-center gap-1">
+                                    <i class="far fa-clock"></i> Dikemaskini: ${stat.timestamp === '-' ? 'Tiada Rekod' : stat.timestamp}
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+
+                const cardHTML = `
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition flex flex-col h-full relative overflow-hidden group">
+                        <div class="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-gray-50 to-transparent opacity-50 group-hover:opacity-100 transition rounded-bl-3xl"></div>
+                        
+                        <div class="flex items-start justify-between mb-3 border-b border-gray-50 pb-3">
+                            <div class="flex items-center gap-3">
+                                ${avatarHTML}
+                                <div>
+                                    <h4 class="font-bold text-gray-900 leading-tight">${staff.nama}</h4>
+                                    <p class="text-xs text-gray-500">${staff.unit}</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex-1">
+                            ${statusesHTML}
+                        </div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', cardHTML);
+            });
+        }
+
+        function startAutoRefresh() {
+            clearInterval(refreshTimer);
+            refreshTimer = setInterval(() => {
+                countdown--;
+                document.getElementById('timerText').innerText = countdown + 's';
+                if (countdown <= 0) {
+                    document.getElementById('timerText').innerText = 'Loading...';
+                    loadAllStatus();
+                }
+            }, 1000);
+        }
+
+        // B. Modal Kemaskini Status
+        function openStatusModal() {
+            document.getElementById('inputTarikhMula').value = getTodayYMD();
+            document.getElementById('inputTarikhTamat').value = '';
+            document.getElementById('inputStatus').value = '';
+            document.getElementById('inputLokasi').value = '';
+            document.getElementById('inputCatatan').value = '';
+            document.getElementById('statusModal').classList.remove('hidden');
+        }
+
+        function closeStatusModal() {
+            document.getElementById('statusModal').classList.add('hidden');
+        }
+
+        document.getElementById('updateStatusForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                id: currentUser.id,
+                nama: currentUser.nama,
+                unit: currentUser.unit,
+                status: document.getElementById('inputStatus').value,
+                lokasi: document.getElementById('inputLokasi').value || '-',
+                catatan: document.getElementById('inputCatatan').value || '-',
+                tarikh_mula: document.getElementById('inputTarikhMula').value,
+                tarikh_tamat: document.getElementById('inputTarikhTamat').value || '' 
+            };
+
+            closeStatusModal();
+            showLoading('Mengemaskini status...');
+            
+            const result = await apiCall('updateStatus', payload);
+            
+            hideLoading();
+            if (result.success) {
+                showToast("Berjaya! Dashboard memaparkan status untuk hari ini.");
+                if(isMockMode) updateMockState(payload);
+                loadAllStatus();
+            } else {
+                showToast("Gagal mengemaskini status.", true);
+            }
+        });
+
+        // C. Modal Sejarah & Export
+        async function openHistoryModal() {
+            document.getElementById('historyModal').classList.remove('hidden');
+            document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="5" class="text-center py-4"><i class="fas fa-circle-notch fa-spin"></i> Memuatkan data...</td></tr>';
+            
+            const today = new Date();
+            const monthStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+            document.getElementById('filterMonth').value = monthStr;
+
+            const result = await apiCall('getHistory', { id: currentUser.id, role: currentUser.role });
+            
+            if (result.success && result.data.length > 0) {
+                currentHistoryData = result.data;
+            } else {
+                currentHistoryData = [];
+            }
+            renderHistoryTable();
+        }
+
+        function closeHistoryModal() { document.getElementById('historyModal').classList.add('hidden'); }
+        function resetHistoryFilter() { document.getElementById('filterMonth').value = ''; renderHistoryTable(); }
+
+        function renderHistoryTable() {
+            const tbody = document.getElementById('historyTableBody');
+            const emptyState = document.getElementById('historyEmpty');
+            const filteredData = getFilteredHistoryData();
+
+            tbody.innerHTML = '';
+
+            if (filteredData.length > 0) {
+                emptyState.classList.add('hidden');
+                filteredData.forEach(row => {
+                    const colorClass = getStatusColorClass(row.status);
+                    
+                    const mulaStr = formatDateDisplay(row.tarikh_mula);
+                    const tamatStr = formatDateDisplay(row.tarikh_tamat);
+                    let rangeText = mulaStr;
+                    if (tamatStr && tamatStr !== mulaStr) rangeText += ` - ${tamatStr}`;
+
+                    const tr = `
+                        <tr class="hover:bg-gray-50 transition">
+                            <td class="py-3 px-4 border-b border-gray-100 whitespace-nowrap text-xs text-gray-500">${row.timestamp}</td>
+                            <td class="py-3 px-4 border-b border-gray-100 font-medium">${row.nama}</td>
+                            <td class="py-3 px-4 border-b border-gray-100">
+                                <div class="flex flex-col gap-1 items-start">
+                                    <span class="px-2 py-1 rounded text-[11px] font-semibold ${colorClass}">${row.status}</span>
+                                    ${rangeText ? `<span class="text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200"><i class="far fa-calendar-alt mr-1"></i>${rangeText}</span>` : ''}
+                                </div>
+                            </td>
+                            <td class="py-3 px-4 border-b border-gray-100 text-sm">${row.lokasi}</td>
+                            <td class="py-3 px-4 border-b border-gray-100 italic text-gray-500 text-sm">${row.catatan}</td>
+                        </tr>
+                    `;
+                    tbody.insertAdjacentHTML('beforeend', tr);
+                });
+            } else {
+                emptyState.classList.remove('hidden');
+            }
+        }
+
+        function getFilteredHistoryData() {
+            const selectedMonth = document.getElementById('filterMonth').value; 
+            return currentHistoryData.filter(row => {
+                if (!selectedMonth) return true; 
+                const parts = row.timestamp.split('/');
+                if (parts.length >= 3) {
+                    const rowMonthStr = `${parts[2].split(' ')[0]}-${parts[1]}`;
+                    return rowMonthStr === selectedMonth;
+                }
+                return true;
+            });
+        }
+
+        function exportToExcel() {
+            const dataToExport = getFilteredHistoryData();
+            if(dataToExport.length === 0) { showToast("Tiada data untuk dieksport", true); return; }
+            
+            const excelData = dataToExport.map(row => {
+                const mulaStr = formatDateDisplay(row.tarikh_mula);
+                const tamatStr = formatDateDisplay(row.tarikh_tamat);
+                return {
+                    "Masa Kemaskini": row.timestamp,
+                    "Nama Pegawai": row.nama,
+                    "Unit": row.unit,
+                    "Status": row.status,
+                    "Tarikh Mula": mulaStr,
+                    "Tarikh Tamat": tamatStr,
+                    "Lokasi": row.lokasi,
+                    "Catatan": row.catatan
+                };
+            });
+
+            const worksheet = XLSX.utils.json_to_sheet(excelData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Sejarah Pergerakan");
+            const monthStr = document.getElementById('filterMonth').value || "Semua";
+            XLSX.writeFile(workbook, `Laporan_Pergerakan_${monthStr}.xlsx`);
+        }
+
+        function exportToPDF() {
+            const dataToExport = getFilteredHistoryData();
+            if(dataToExport.length === 0) { showToast("Tiada data untuk dieksport", true); return; }
+            
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('landscape'); 
+            
+            doc.setFontSize(16);
+            doc.text("Laporan Sejarah Pergerakan Pegawai S4PD", 14, 15);
+            
+            const selectedMonth = document.getElementById('filterMonth').value;
+            doc.setFontSize(11);
+            doc.text(`Bulan Tapisan: ${selectedMonth || 'Semua (Keseluruhan)'}`, 14, 23);
+
+            const tableColumn = ["Dikemaskini", "Nama", "Status", "Tarikh Mula", "Tarikh Tamat", "Lokasi", "Catatan"];
+            const tableRows = [];
+
+            dataToExport.forEach(row => {
+                tableRows.push([
+                    row.timestamp,
+                    row.nama,
+                    row.status,
+                    formatDateDisplay(row.tarikh_mula),
+                    formatDateDisplay(row.tarikh_tamat),
+                    row.lokasi,
+                    row.catatan
+                ]);
+            });
+
+            doc.autoTable({
+                head: [tableColumn], body: tableRows, startY: 30, styles: { fontSize: 8 },
+                headStyles: { fillColor: [37, 99, 235] }, margin: { top: 30 }
+            });
+
+            const monthStr = selectedMonth || "Semua";
+            doc.save(`Laporan_Pergerakan_${monthStr}.pdf`);
+        }
+
+        // ========================================
+        // 6. MOCK DATA & API 
+        // ========================================
+        
+        let mockUsers = [
+            { id: 'P001', nama: 'Ahmad Albab', unit: 'Timbalan Pengarah Pendidikan', password: '123', role: 'admin', gambar: 'https://i.pravatar.cc/150?u=P001' },
+            { id: 'P002', nama: 'Siti Saleha', unit: 'Unit Transformasi Pendidikan', password: '123', role: 'user', gambar: 'https://i.pravatar.cc/150?u=P002' },
+            { id: 'P003', nama: 'Muthusamy', unit: 'Unit Perancangan & Pembangunan', password: '123', role: 'user', gambar: 'https://i.pravatar.cc/150?u=P003' }
+        ];
+
+        let mockStatusData = [
+            { id: 'P001', nama: 'Ahmad Albab', unit: 'Timbalan Pengarah Pendidikan', status: 'Hadir Bertugas', lokasi: 'Pejabat', catatan: 'Masuk Pagi', tarikh_mula: getTodayYMD(), tarikh_tamat: getTodayYMD(), timestamp: '04/06/2026 08:00' },
+            { id: 'P001', nama: 'Ahmad Albab', unit: 'Timbalan Pengarah Pendidikan', status: 'Outstation', lokasi: 'PPD Kota Setar', catatan: 'Mesyuarat Petang', tarikh_mula: getTodayYMD(), tarikh_tamat: getTodayYMD(), timestamp: '04/06/2026 14:00' },
+            { id: 'P002', nama: 'Siti Saleha', unit: 'Unit Transformasi Pendidikan', status: 'Cuti', lokasi: '-', catatan: 'Cuti Rehat Tahunan', tarikh_mula: '2026-06-05', tarikh_tamat: '2026-06-10', timestamp: '03/06/2026 14:00' }
+        ];
+
+        function generateMockTime(hoursAgo) {
+            let d = new Date(); d.setHours(d.getHours() - hoursAgo);
+            return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth()+1).padStart(2, '0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+        }
+
+        function updateMockState(payload) {
+            let newObj = { ...payload, timestamp: generateMockTime(0) }; 
+            mockStatusData.push(newObj); 
+        }
+
+        function mockApiCall(action, payload) {
+            return new Promise((resolve) => {
+                setTimeout(() => {
+                    if (action === 'login') {
+                        let user = mockUsers.find(u => u.id === payload.id && u.password === payload.password);
+                        if (user) resolve({ success: true, user: { id: user.id, nama: user.nama, unit: user.unit, role: user.role, gambar: user.gambar } });
+                        else resolve({ success: false, message: 'ID/Password salah' });
+                    } 
+                    else if (action === 'getAllStatus') {
+                        let todayD = new Date();
+                        todayD.setHours(0,0,0,0);
+                        let todayTime = todayD.getTime();
+
+                        let mappedData = mockUsers.map(u => {
+                            let statusesForToday = [];
+                            
+                            for (let i = mockStatusData.length - 1; i >= 0; i--) {
+                                let s = mockStatusData[i];
+                                if (s.id === u.id) {
+                                    let dMula = new Date(s.tarikh_mula); dMula.setHours(0,0,0,0);
+                                    let dTamat = s.tarikh_tamat ? new Date(s.tarikh_tamat) : dMula;
+                                    dTamat.setHours(0,0,0,0);
+
+                                    if (todayTime >= dMula.getTime() && todayTime <= dTamat.getTime()) {
+                                        statusesForToday.push(s);
+                                    }
+                                }
+                            }
+
+                            if (statusesForToday.length > 0) {
+                                return { id: u.id, nama: u.nama, unit: u.unit, gambar: u.gambar, statuses: statusesForToday };
+                            } else {
+                                return { 
+                                    id: u.id, nama: u.nama, unit: u.unit, gambar: u.gambar, 
+                                    statuses: [{ status: 'Belum Kemaskini', lokasi: '-', catatan: 'Tiada maklumat pergerakan untuk hari ini.', tarikh_mula: '-', tarikh_tamat: '-', timestamp: '-' }] 
+                                };
+                            }
+                        });
+                        resolve({ success: true, data: mappedData });
+                    }
+                    else if (action === 'updateStatus') {
+                        resolve({ success: true, message: 'Berjaya' });
+                    }
+                    else if (action === 'getHistory') {
+                        let history = (payload.role === 'admin') ? mockStatusData : mockStatusData.filter(s => s.id === payload.id);
+                        resolve({ success: true, data: [...history].reverse() });
+                    }
+                }, 800);
+            });
+        }
+    </script>
+</body>
+</html>
